@@ -38,6 +38,44 @@ function levelConfig(level) {
   return { colors, emptyTubes: 2 };
 }
 
+/* ---------- Daily challenge ----------
+   One board per day, identical for every player, so scores are
+   comparable and worth sharing. Deliberately fixed at 8 colors rather
+   than following the player's campaign level: the challenge has to be
+   the same whether you're on level 3 or level 300, and keeping to the
+   first eight hues means the share grid only ever needs emoji that are
+   clearly distinct from one another. */
+const DAILY = {
+  colors: 8,
+  emptyTubes: 2,
+  epoch: Date.UTC(2026, 0, 1), // day #1
+  // Indexed by PALETTE colour id. Squares and circles are used so all
+  // eight read as distinct glyphs even where the hues are close.
+  emoji: ["", "🟥", "🟦", "🟩", "🟨", "🟪", "🟧", "🔴", "🔵"],
+};
+
+// The day rolls over at the player's local midnight, matching how other
+// daily puzzles behave.
+function dayKey(date) {
+  const t = date || new Date();
+  return t.getFullYear() * 10000 + (t.getMonth() + 1) * 100 + t.getDate();
+}
+function dayNumber(date) {
+  const t = date || new Date();
+  const local = Date.UTC(t.getFullYear(), t.getMonth(), t.getDate());
+  return Math.floor((local - DAILY.epoch) / 86400000) + 1;
+}
+function prevDayKey(date) {
+  const t = date || new Date();
+  return dayKey(new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1));
+}
+function loadDaily() {
+  try { return JSON.parse(localStorage.getItem("waterpuzzle.daily")) || {}; } catch (_) { return {}; }
+}
+function saveDaily(rec) {
+  try { localStorage.setItem("waterpuzzle.daily", JSON.stringify(rec)); } catch (_) {}
+}
+
 const PW_DEFAULT = { undo: 5, hint: 3, add: 3 };
 
 const state = {
@@ -51,6 +89,8 @@ const state = {
   selected: null,
   won: false,
   hint: null,
+  mode: "campaign",  // "campaign" | "daily"
+  order: [],         // daily: colours in the order you finished them
 };
 
 /* ============================================================
@@ -65,12 +105,13 @@ const state = {
 // occasionally tens of seconds, of a fully blocked main thread. BFS also
 // hands back the optimal move count for free, so there's no need for a
 // second, separate solve afterwards.
-function generateLevel(level) {
-  const { colors, emptyTubes } = levelConfig(level);
+function generateLevel(level, opts) {
+  const { colors, emptyTubes } = (opts && opts.config) || levelConfig(level);
+  const rng = opts && opts.rng;
   for (let attempt = 0; attempt < 80; attempt++) {
     const pool = [];
     for (let c = 1; c <= colors; c++) for (let i = 0; i < CAPACITY; i++) pool.push(c);
-    shuffle(pool);
+    shuffle(pool, rng);
     const tubes = [];
     for (let c = 0; c < colors; c++) tubes.push(pool.slice(c * CAPACITY, c * CAPACITY + CAPACITY));
     for (let e = 0; e < emptyTubes; e++) tubes.push([]);
@@ -85,11 +126,25 @@ function generateLevel(level) {
   return { tubes, optimal: 0 };
 }
 
-function shuffle(arr) {
+function shuffle(arr, rng) {
+  const rand = rng || Math.random;
   for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rand() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
+}
+
+// Deterministic PRNG (mulberry32). The daily challenge seeds this with the
+// date so every player is dealt the exact same board — generation is
+// otherwise pure, so the same seed always lands on the same puzzle.
+function seededRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function legalMoves(tubes) {
@@ -681,8 +736,8 @@ function finalizePour(now) {
   dyn[to].wave = 6;
   jellyImpulse(to, now); jellyImpulse(from, now);
   let done = false;
-  if (isTubeComplete(state.tubes[to])) { markComplete(to, now); done = true; }
-  if (isTubeComplete(state.tubes[from])) { markComplete(from, now); done = true; }
+  if (isTubeComplete(state.tubes[to])) { markComplete(to, now); recordComplete(to); done = true; }
+  if (isTubeComplete(state.tubes[from])) { markComplete(from, now); recordComplete(from); done = true; }
   if (done) sfx("complete");
   if (isSolved(state.tubes)) onWin();
 }
@@ -1023,18 +1078,44 @@ function showLevelLoading(on) {
   if (el) el.classList.toggle("hidden", !on);
 }
 function loadLevel(level) {
+  state.mode = "campaign";
   state.level = level;
+  dealBoard(() => generateLevel(level));
+}
+
+// Today's board, seeded by the date so it is byte-for-byte the same for
+// everyone. Generation is otherwise pure, so the seed alone fixes it.
+function loadDailyBoard() {
+  state.mode = "daily";
+  const seed = dayKey();
+  dealBoard(() => generateLevel(0, {
+    config: { colors: DAILY.colors, emptyTubes: DAILY.emptyTubes },
+    rng: seededRng(seed),
+  }));
+}
+
+function dealBoard(generate) {
+  // End the outgoing board's play session before dealing the next one,
+  // so swapping between campaign and daily mid-play stays paired.
+  if (window.PuruPopAds) window.PuruPopAds.gameplayStop();
   showLevelLoading(true);
   // High levels deal many more colors, and finding a guaranteed-solvable
   // shuffle for them is a real (if brief) search — double-rAF guarantees
   // the loading UI actually paints a frame before that blocking search
   // runs, instead of the tab just freezing with no feedback.
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    const generated = generateLevel(level);
+    const generated = generate();
     state.tubes = generated.tubes;
     state.optimal = generated.optimal || null;
     state.moves = 0; state.history = [];
     state.selected = null; state.won = false; state.hint = null;
+    // A shuffle can deal a bottle that is already single-coloured; those
+    // never pass through finalizePour, so seed them here or they'd be
+    // missing from the daily share grid.
+    state.order = [];
+    if (state.mode === "daily") {
+      for (let i = 0; i < state.tubes.length; i++) recordComplete(i);
+    }
     pour = null; dyn = []; syncDyn();
     hideWin(); updateHud(); popInHud();
     showLevelLoading(false);
@@ -1042,8 +1123,23 @@ function loadLevel(level) {
   }));
 }
 
+// Daily only: remember which colour was finished when, so the shared
+// grid encodes the player's own solving path rather than the board.
+function recordComplete(idx) {
+  if (state.mode !== "daily") return;
+  if (!isTubeComplete(state.tubes[idx])) return;
+  const c = topColor(state.tubes[idx]);
+  if (c && state.order.indexOf(c) === -1) state.order.push(c);
+}
+
 function updateHud() {
-  levelValueEl.textContent = String(state.level);
+  // The level pill doubles as the daily-mode indicator and its way out.
+  const daily = state.mode === "daily";
+  document.getElementById("levelLabel").textContent = daily ? "Daily" : "Level";
+  levelValueEl.textContent = daily ? "#" + dayNumber() : String(state.level);
+  document.getElementById("levelExit").classList.toggle("hidden", !daily);
+  document.getElementById("levelPill").classList.toggle("exitable", daily);
+  refreshDailyBadge();
   animateCoins(state.coins);
   setBadge("undoBadge", state.pw.undo);
   setBadge("hintBadge", state.pw.hint);
@@ -1052,7 +1148,7 @@ function updateHud() {
 
 // Staggered candy-shell bounce-in for the chrome around a fresh level —
 // the "everything hops onto the stage" feel of a top-tier match game.
-const POP_IN_IDS = ["coinPill", "levelPill", "settingsBtn", "undoBtn", "hintBtn", "addTubeBtn"];
+const POP_IN_IDS = ["coinPill", "levelPill", "dailyBtn", "settingsBtn", "undoBtn", "hintBtn", "addTubeBtn"];
 function popInHud() {
   POP_IN_IDS.forEach((id, i) => {
     const el = document.getElementById(id);
@@ -1107,7 +1203,8 @@ function onWin() {
   const stars = starCount();
   const reward = 40 + stars * 30;
   state.coins += reward; saveCoins();
-  try { localStorage.setItem("waterpuzzle.level", String(state.level + 1)); } catch (_) {}
+  if (state.mode === "daily") recordDailyWin(stars);
+  else { try { localStorage.setItem("waterpuzzle.level", String(state.level + 1)); } catch (_) {} }
   updateHud();
 
   // Celebration wave: every filled bottle pops in sequence before the card.
@@ -1123,12 +1220,128 @@ function onWin() {
     const optTxt = state.optimal ? ` · Best ${state.optimal}` : "";
     document.getElementById("winSub").innerHTML = `Cleared in <b>${state.moves}</b> moves${optTxt}`;
     document.getElementById("winCoins").textContent = "+" + reward;
+    dressWinCard();
     overlay.classList.remove("hidden");
     starEls.forEach((s, i) => setTimeout(() => { if (i < stars) s.classList.add("on"); }, 200 + i * 240));
     startConfetti(); sfx("win");
   }, delay);
 }
 function hideWin() { overlay.classList.add("hidden"); stopConfetti(); }
+
+/* ---------- Daily result, streak and sharing ---------- */
+function recordDailyWin(stars) {
+  const today = dayKey();
+  const rec = loadDaily();
+  // The streak counts days completed, not attempts: replaying today
+  // leaves it alone, and missing a day resets it to 1.
+  if (rec.lastWinDay !== today) {
+    rec.streak = rec.lastWinDay === prevDayKey() ? (rec.streak || 0) + 1 : 1;
+    rec.lastWinDay = today;
+  }
+  // Keep the best run of the day, so replaying can only improve it.
+  if (rec.day !== today || !(rec.moves > 0) || state.moves < rec.moves) {
+    rec.day = today;
+    rec.moves = state.moves;
+    rec.stars = stars;
+    rec.optimal = state.optimal || null;
+    rec.order = state.order.slice();
+  }
+  saveDaily(rec);
+  refreshDailyBadge();
+}
+
+function starString(n) { return "★".repeat(n) + "☆".repeat(Math.max(0, 3 - n)); }
+function dailyGrid(rec) { return (rec.order || []).map((c) => DAILY.emoji[c] || "⬜").join(""); }
+
+function dailyShareText(rec) {
+  const lines = [
+    `PuruPop Daily #${dayNumber()}`,
+    `${starString(rec.stars)} · ${rec.moves} moves${rec.optimal ? ` (best ${rec.optimal})` : ""}`,
+    dailyGrid(rec),
+  ];
+  if (rec.streak > 1) lines.push(`🔥 ${rec.streak} day streak`);
+  // file:// has no meaningful origin, so only link when actually hosted.
+  if (location.protocol === "http:" || location.protocol === "https:") {
+    lines.push("", location.origin + location.pathname);
+  }
+  return lines.join("\n");
+}
+
+async function shareDaily() {
+  const rec = loadDaily();
+  if (rec.day !== dayKey()) return;
+  const text = dailyShareText(rec);
+  if (navigator.share) {
+    try { await navigator.share({ text }); return; }
+    catch (err) {
+      // The player backing out of the share sheet isn't a failure, and
+      // shouldn't then dump the text onto their clipboard.
+      if (err && err.name === "AbortError") return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Copied to clipboard");
+  } catch (_) {
+    toast("Couldn't copy — long-press to select");
+  }
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), 2000);
+}
+
+// The win card doubles as the daily result card: same celebration, but
+// it offers sharing and a way back instead of the next level.
+function dressWinCard() {
+  const daily = state.mode === "daily";
+  const ribbon = document.querySelector(".win-ribbon");
+  if (ribbon) ribbon.textContent = daily ? `DAILY #${dayNumber()}` : "LEVEL CLEAR";
+  document.getElementById("nextLevelBtn").classList.toggle("hidden", daily);
+  document.getElementById("winDailyRow").classList.toggle("hidden", !daily);
+  const streakEl = document.getElementById("winStreak");
+  const gridEl = document.getElementById("winGrid");
+  if (daily) {
+    const rec = loadDaily();
+    const hasStreak = rec.streak > 1;
+    streakEl.textContent = hasStreak ? `🔥 ${rec.streak} day streak` : "";
+    streakEl.classList.toggle("hidden", !hasStreak);
+    gridEl.textContent = dailyGrid(rec);
+  }
+}
+
+/* ---------- Daily modal ---------- */
+const dailyModal = document.getElementById("dailyModal");
+function refreshDailyBadge() {
+  const dot = document.getElementById("dailyDot");
+  if (dot) dot.classList.toggle("hidden", loadDaily().day === dayKey());
+}
+function openDailyModal() {
+  const rec = loadDaily();
+  const done = rec.day === dayKey();
+  document.getElementById("dailyNum").textContent = "#" + dayNumber();
+  const live = rec.lastWinDay === dayKey() || rec.lastWinDay === prevDayKey();
+  document.getElementById("dailyStreak").textContent = live && rec.streak > 0 ? `🔥 ${rec.streak}` : "—";
+  const resultEl = document.getElementById("dailyResult");
+  resultEl.classList.toggle("hidden", !done);
+  if (done) {
+    document.getElementById("dailyResultStars").textContent = starString(rec.stars);
+    document.getElementById("dailyResultMoves").innerHTML = `Cleared in <b>${rec.moves}</b> moves`;
+    document.getElementById("dailyResultGrid").textContent = dailyGrid(rec);
+  }
+  document.getElementById("dailyPlay").textContent = done ? "Play again" : "Play today's board";
+  document.getElementById("dailyShare").classList.toggle("hidden", !done);
+  dailyModal.classList.remove("hidden");
+}
+function closeDailyModal() { dailyModal.classList.add("hidden"); }
+function startDaily() { closeDailyModal(); audioResume(); loadDailyBoard(); }
+function exitDaily() { loadLevel(loadProgress()); }
 
 /* ---------- Confetti ---------- */
 const confettiCanvas = document.getElementById("confetti");
@@ -1334,6 +1547,14 @@ on("addTubeBtn", "click", () => { audioResume(); useAdd(); });
 
 on("nextLevelBtn", "click", () => newLevel(true));
 
+on("dailyBtn", "click", () => { audioResume(); openDailyModal(); });
+on("dailyClose", "click", closeDailyModal);
+on("dailyPlay", "click", startDaily);
+on("dailyShare", "click", shareDaily);
+on("winShareBtn", "click", shareDaily);
+on("winBackBtn", "click", () => { hideWin(); exitDaily(); });
+on("levelPill", "click", () => { if (state.mode === "daily") exitDaily(); });
+
 on("adClaim", "click", () => { audioResume(); grantAd(); });
 on("adClose", "click", closeAd);
 
@@ -1382,6 +1603,8 @@ window.PuruPop = {
   state, layout: () => LAYOUT, click: onTubeClick, pouring: () => !!pour,
   legalMoves, applyPour, isSolved, boardKey, solvePath,
   useUndo, useHint, useAdd, openAd, grantAd, openStore, buyPowerup, openShop, buyInShop,
+  startDaily, exitDaily, openDailyModal, shareDaily, dailyShareText, loadDaily, recordDailyWin,
+  dayKey, dayNumber,
   pourP: () => pourProgress(), freeze: (v) => { FREEZE = v; },
   fx: (i, back) => { markComplete(i, performance.now() - (back || 0)); },
   audio: () => ({ ac: !!AC, state: AC && AC.state, bgm: bgmOn, step: bgmStep, soundOn, musicOn }),

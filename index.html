@@ -33,7 +33,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=22" />
+  <link rel="stylesheet" href="style.css?v=24" />
 
   <!-- Optional analytics / error monitoring — inert until configured.
        Fill in a real GA4 Measurement ID / Sentry DSN to turn these on;
@@ -68,7 +68,7 @@
     };
   </script>
   <script src="analytics.js?v=1" defer></script>
-  <script src="ads.js?v=2"></script>
+  <script src="ads.js?v=3"></script>
 </head>
 <body>
   <div class="sky" aria-hidden="true">
@@ -87,7 +87,12 @@
         <span class="coin-plus">＋</span>
       </button>
 
-      <div class="level-pill" id="levelPill">Level <span id="levelValue">1</span></div>
+      <button class="level-pill" id="levelPill"><span id="levelLabel">Level</span> <span id="levelValue">1</span><span class="pill-x hidden" id="levelExit">✕</span></button>
+
+      <button class="round-btn" id="dailyBtn" aria-label="Daily challenge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="M12 13.2v3.6M10.2 15h3.6"/></svg>
+        <span class="dot hidden" id="dailyDot"></span>
+      </button>
 
       <button class="round-btn" id="settingsBtn" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -131,9 +136,37 @@
       <h2 class="win-title">Well done!</h2>
       <p class="win-sub" id="winSub"></p>
       <div class="win-coins"><span class="coin sm"><span class="coin-star">★</span></span> <b id="winCoins">+50</b></div>
+      <div class="win-daily hidden" id="winDailyRow">
+        <div class="daily-grid" id="winGrid"></div>
+        <div class="daily-streak hidden" id="winStreak"></div>
+        <button class="btn primary wide" id="winShareBtn">Share result</button>
+        <button class="btn ghost wide" id="winBackBtn">Back to levels</button>
+      </div>
       <button class="btn primary wide" id="nextLevelBtn">Next ➜</button>
     </div>
   </div>
+
+  <!-- Daily challenge -->
+  <div id="dailyModal" class="modal hidden">
+    <div class="modal-card">
+      <button class="ad-x" id="dailyClose" aria-label="Close">✕</button>
+      <h3 class="modal-title">Daily Challenge</h3>
+      <div class="daily-head">
+        <span class="daily-num" id="dailyNum">#1</span>
+        <span class="daily-streak-pill" id="dailyStreak">—</span>
+      </div>
+      <p class="daily-blurb">Everyone in the world gets the same board today. Clear it, then share how you did.</p>
+      <div class="daily-result hidden" id="dailyResult">
+        <div class="daily-stars" id="dailyResultStars">★★★</div>
+        <div class="daily-moves" id="dailyResultMoves"></div>
+        <div class="daily-grid" id="dailyResultGrid"></div>
+      </div>
+      <button class="btn primary wide" id="dailyPlay">Play today's board</button>
+      <button class="btn ghost wide hidden" id="dailyShare">Share result</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
 
   <!-- Settings -->
   <div id="settingsModal" class="modal hidden">
@@ -216,6 +249,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=23"></script>
+  <script src="game.js?v=24"></script>
 </body>
 </html>

@@ -110,7 +110,7 @@ body {
 }
 
 /* ============ HUD ============ */
-.hud { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0 4px; }
+.hud { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0 4px; }
 
 .coin-pill, .level-pill {
   display: flex; align-items: center;
@@ -142,10 +142,11 @@ body {
 
 .level-pill {
   font-family: "Baloo 2", sans-serif; font-weight: 800; font-size: 19px;
-  padding: 9px 22px;
+  padding: 9px 18px;
   letter-spacing: .5px;
+  color: var(--text);
 }
-.level-pill span { color: var(--accent); margin-left: 2px; }
+#levelValue { color: var(--accent); margin-left: 2px; }
 
 .round-btn {
   position: relative;
@@ -319,6 +320,51 @@ body {
 .btn:active { transform: scale(0.96); }
 .btn.wide { width: 100%; }
 .btn.primary { background: linear-gradient(180deg, var(--mint), var(--mint-2)); color: #033322; box-shadow: 0 10px 22px rgba(5,150,105,.45), inset 0 2px 0 rgba(255,255,255,.5); }
+.btn.ghost { background: rgba(255,255,255,0.10); color: var(--text); border: 2px solid var(--rim-soft); box-shadow: none; }
+.btn.ghost + .btn, .btn + .btn.ghost { margin-top: 10px; }
+
+/* ============ Daily challenge ============ */
+.level-pill.exitable { cursor: pointer; }
+.pill-x { margin-left: 8px; opacity: .65; font-size: 15px; }
+.round-btn .dot {
+  position: absolute; top: -2px; right: -2px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
+  border: 2px solid var(--bg-mid);
+  box-shadow: 0 0 10px rgba(255,211,78,.9);
+  animation: dotPulse 1.6s ease-in-out infinite;
+}
+@keyframes dotPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.22); } }
+
+.daily-head { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; }
+.daily-num { font-family: "Baloo 2", sans-serif; font-weight: 800; font-size: 22px; color: var(--gold); }
+.daily-streak-pill {
+  padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 800;
+  background: rgba(255,255,255,0.10); border: 1px solid var(--stroke); color: var(--text);
+}
+.daily-blurb { color: var(--text-dim); font-size: 14px; font-weight: 700; margin: 0 0 16px; line-height: 1.5; }
+.daily-result {
+  margin-bottom: 16px; padding: 14px 12px; border-radius: 16px;
+  border: 1px solid var(--stroke); background: rgba(255,255,255,0.07);
+}
+.daily-stars { font-size: 24px; color: var(--gold); letter-spacing: 3px; line-height: 1.2; }
+.daily-moves { font-size: 14px; font-weight: 700; color: var(--text-dim); margin-top: 2px; }
+.daily-moves b { color: var(--text); }
+.daily-grid { font-size: 19px; letter-spacing: 2px; margin-top: 8px; word-break: break-all; }
+.daily-streak { font-size: 14px; font-weight: 800; color: var(--gold); margin: 8px 0 2px; }
+.win-daily { margin-bottom: 4px; }
+.win-daily .daily-grid { margin: 0 0 14px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+  z-index: 90; max-width: 86vw;
+  padding: 11px 20px; border-radius: 999px;
+  background: rgba(20, 8, 40, 0.94); border: 1.5px solid var(--rim-soft);
+  color: var(--text); font-size: 14px; font-weight: 700; text-align: center;
+  box-shadow: 0 10px 28px rgba(0,0,0,.5);
+  animation: toastIn .25s cubic-bezier(.2,1.4,.5,1);
+}
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 /* Settings modal */
 .modal-card { padding: 26px 22px; }

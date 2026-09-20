@@ -87,6 +87,7 @@
      can avoid interrupting a live board, and expects an explicit signal
      once loading has finished. Those are review requirements, not just
      optimizations, hence gameplayStart/gameplayStop below. */
+  let playing = false;
   let pokiReady = null;
   function initPoki() {
     if (!pokiReady) {
@@ -169,13 +170,21 @@
       }
     },
 
-    /* Portal SDKs need to know when a board is actually being played. */
+    /* Portal SDKs need to know when a board is actually being played,
+       and expect start/stop to come in pairs. Tracking it here keeps
+       that true no matter how callers interleave — abandoning a board
+       mid-play for the daily challenge, say, or winning (which stops)
+       and then being dealt the next level (which starts). */
     gameplayStart() {
+      if (playing) return;
+      playing = true;
       if (Ads.provider() === "poki" && window.PokiSDK) {
         try { window.PokiSDK.gameplayStart(); } catch (err) { report(err); }
       }
     },
     gameplayStop() {
+      if (!playing) return;
+      playing = false;
       if (Ads.provider() === "poki" && window.PokiSDK) {
         try { window.PokiSDK.gameplayStop(); } catch (err) { report(err); }
       }
