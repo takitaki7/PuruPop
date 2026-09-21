@@ -135,11 +135,11 @@ Poki の審査通過・AdMob アカウント作成とユニットID発行はご�
 
 ## iOS アプリ化（Capacitor）
 
-Web 版のコードをそのまま WKWebView で動かすネイティブアプリとして出せるよう、Capacitor の土台を同梱しています。**ビルド・署名・審査提出には Mac（Xcode）と Apple Developer Program 登録（$99/年）が必須**で、この部分だけはご自身の環境が必要です。
+Web 版のコードをそのまま WKWebView で動かすネイティブアプリとして出せるよう、Capacitor の土台を同梱しています。**Apple Developer Program 登録（$99/年）は必須**ですが、Mac は必須ではありません（下記「Mac がない場合」）。
 
 `ios/` プロジェクトは生成済みでコミットしてあります（アプリアイコン・スプラッシュ・縦向き固定まで設定済み）。Mac 側では生成コマンドを叩く必要はありません。
 
-### Mac での手順
+### Mac がある場合の手順
 
 ```bash
 npm install
@@ -148,6 +148,25 @@ npm run ios:open    # Xcode が開く
 ```
 
 以降、Web 側のコードを変更するたびに `npm run ios:sync` を実行してください。アイコンを差し替えたい場合は `assets/icon.png`（1024×1024）と `assets/splash.png` を置き換えて `npm run icons`。
+
+### Mac がない場合（Windows から出す）
+
+**Xcode Cloud は使えません。** ワークフローの作成が Xcode アプリ内から行う設計のため、最初の1回で Mac が必要になります。
+
+代わりに **Codemagic** の設定を `codemagic.yaml` として同梱しています。ビルドから署名、TestFlight への配信まで Codemagic の macOS マシン上で完結するので、**ブラウザだけで App Store 提出まで到達できます**。署名は App Store Connect API キー方式で、キーチェーンや CSR の操作は不要です。
+
+ブラウザでの準備（初回のみ）:
+
+1. **App Store Connect → Users and Access → Integrations → App Store Connect API** で「App Manager」権限のキーを作成。`.p8` ファイルは**一度しかダウンロードできない**ので必ず保存し、Key ID と Issuer ID も控える。
+2. **App Store Connect → Apps** で Bundle ID `app.purupop.game` のアプリを作成（初回アップロード前に存在している必要があります）。
+3. [codemagic.io](https://codemagic.io) でこのリポジトリを連携し、**Teams → Integrations → Apple Developer Portal** に 1 のキーを登録。名前は `codemagic.yaml` の `app_store_connect:` と**完全に一致**させる（既定は `PuruPop ASC Key`）。
+4. `ios-release` ワークフローを実行。
+
+> ⚠️ このワークフローは実際の macOS ビルド環境でしか検証できないため、**初回は失敗する前提**で臨んでください。よくある詰まりどころは Xcode バージョン（`xcode: latest`）と署名まわりです。ログを見ればだいたい分かります。
+>
+> Apple Developer Program の登録自体も Web / iPhone の Developer アプリから可能で Mac は不要です（本人確認で iPhone が要る場合があります）。TestFlight での実機確認には iPhone/iPad が必要です。
+
+他の選択肢として **GitHub Actions**（macOS ランナー）もありますが、プライベートリポジトリでは macOS の課金が分単位10倍で割高、かつ署名を自前で用意する必要があります。**MacinCloud** 等で Mac をレンタルして Windows からリモート操作する手もあり、その場合は Xcode Cloud も使えるようになります。
 
 ### Xcode 側で必要な設定
 
@@ -195,7 +214,8 @@ npm run ios:open    # Xcode が開く
 | `native.js` | ネイティブ専用の処理（スプラッシュ制御・ステータスバー）。ブラウザでは何もしません |
 | `capacitor.config.json` / `package.json` / `scripts/build-www.mjs` | iOS ビルドの設定とビルドスクリプト |
 | `assets/` | アプリアイコン・スプラッシュの元画像（`npm run icons` の入力） |
-| `ios/` | 生成済みの Xcode プロジェクト |
+| `ios/` | 生成済みの Xcode プロジェクト（共有スキーム同梱＝CIでビルド可能） |
+| `codemagic.yaml` | Mac なしで iOS ビルド〜TestFlight 配信を行う CI 設定 |
 | `ads.js` | リワード広告アダプタ（Poki / AdMob／未設定ならシミュレーションへフォールバック） |
 | `terms.html` / `privacy.html` / `tokushoho.html` | 利用規約・プライバシーポリシー・特定商取引法に基づく表記（要・実情報への差し替え） |
 
