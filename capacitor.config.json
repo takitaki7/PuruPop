@@ -1,0 +1,22 @@
+{
+  "appId": "app.purupop.game",
+  "appName": "PuruPop",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#22124e"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "backgroundColor": "#22124e",
+      "iosSpinnerStyle": "small",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#22124e",
+      "overlaysWebView": true
+    }
+  }
+}

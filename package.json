@@ -1,0 +1,27 @@
+{
+  "name": "purupop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PuruPop — a color-sorting potion puzzle. Vanilla web game, wrapped for iOS with Capacitor.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-www.mjs",
+    "serve": "python3 -m http.server 8201",
+    "ios:add": "npm run build && cap add ios",
+    "ios:sync": "npm run build && cap sync ios",
+    "ios:open": "cap open ios",
+    "icons": "capacitor-assets generate --ios --assetPath assets"
+  },
+  "dependencies": {
+    "@capacitor-community/admob": "^8.1.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.2"
+  }
+}

@@ -72,14 +72,62 @@
     return admobReady;
   }
 
+  // The plugin's own event names. Kept as literals so this file has no
+  // build-time dependency on the plugin's enums.
+  const ADMOB_EV = {
+    rewarded: "onRewardedVideoAdReward",
+    dismissed: "onRewardedVideoAdDismissed",
+    failedToShow: "onRewardedVideoAdFailedToShow",
+  };
+
+  function listen(plugin, event, fn) {
+    return Promise.resolve()
+      .then(() => plugin.addListener(event, fn))
+      .catch(() => null);
+  }
+
   async function showAdMobRewarded(kind) {
     const plugin = admobPlugin();
     const adId = unitFor(kind);
     if (!plugin || !adId) return null;
+
     await initAdMob(plugin);
-    await plugin.prepareRewardVideoAd({ adId, isTesting: !!cfg.testMode });
-    const reward = await plugin.showRewardVideoAd();
-    return !!reward;
+    await plugin.prepareRewardVideoAd({
+      adId,
+      isTesting: !!cfg.testMode,
+      npa: !!cfg.nonPersonalized,
+    });
+
+    // showRewardVideoAd() resolves only once the reward is actually
+    // earned, so a player who dismisses the ad would leave it pending
+    // forever and the tap would silently do nothing. The plugin reports
+    // dismissal through events instead — and documents that Dismissed
+    // says nothing about whether a reward was earned — so settle on the
+    // events and treat the show promise as just one more signal.
+    let earned = false;
+    let settle = () => {};
+    const outcome = new Promise((resolve) => { settle = resolve; });
+    // Registered before showing, so an ad that completes immediately
+    // can't fire its events before anything is listening.
+    const handles = await Promise.all([
+      listen(plugin, ADMOB_EV.rewarded, () => { earned = true; }),
+      listen(plugin, ADMOB_EV.dismissed, () => settle(earned)),
+      listen(plugin, ADMOB_EV.failedToShow, () => settle(null)),
+    ]);
+
+    mute(true);
+    try {
+      plugin.showRewardVideoAd().then(
+        () => { earned = true; settle(true); },
+        () => settle(null)
+      );
+      return await outcome;
+    } finally {
+      mute(false);
+      for (const h of handles) {
+        try { if (h && h.remove) await h.remove(); } catch (_) { /* already gone */ }
+      }
+    }
   }
 
   /* ---------- Poki (web portal) ----------

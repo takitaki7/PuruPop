@@ -133,6 +133,43 @@ Poki の審査通過・AdMob アカウント作成とユニットID発行はご�
 
 `game.js` の `PURCHASES_ENABLED` を `true` にすると、Shop の「Coming soon」バナーと各購入ボタンのロックが外れます。ただし現状のコイン消費はクライアント側で完結しているだけで、**実際の決済処理（Stripe 等）は未実装**です。有料販売を始める場合は、決済連携に加えて下記の法務対応が必要になります。
 
+## iOS アプリ化（Capacitor）
+
+Web 版のコードをそのまま WKWebView で動かすネイティブアプリとして出せるよう、Capacitor の土台を同梱しています。**ビルド・署名・審査提出には Mac（Xcode）と Apple Developer Program 登録（$99/年）が必須**で、この部分だけはご自身の環境が必要です。
+
+`ios/` プロジェクトは生成済みでコミットしてあります（アプリアイコン・スプラッシュ・縦向き固定まで設定済み）。Mac 側では生成コマンドを叩く必要はありません。
+
+### Mac での手順
+
+```bash
+npm install
+npm run ios:sync    # www/ をビルドして ios/ に反映
+npm run ios:open    # Xcode が開く
+```
+
+以降、Web 側のコードを変更するたびに `npm run ios:sync` を実行してください。アイコンを差し替えたい場合は `assets/icon.png`（1024×1024）と `assets/splash.png` を置き換えて `npm run icons`。
+
+### Xcode 側で必要な設定
+
+| 項目 | 設定内容 |
+| --- | --- |
+| Signing & Capabilities | ご自身の Apple Developer チームを選択（**これだけは必須**） |
+| Bundle Identifier | `app.purupop.game`（変更する場合は `capacitor.config.json` も合わせる） |
+| Info.plist → `GADApplicationIdentifier` | AdMob の**アプリID**（ユニットIDとは別物）。**AdMob を使う場合は必須**で、未設定のまま SDK を初期化するとクラッシュします |
+| Info.plist → `NSUserTrackingUsageDescription` | ATT ダイアログの説明文。**パーソナライズ広告を出す場合のみ必要** |
+
+> 広告ユニットIDが未設定のうちは `ads.js` が AdMob を初期化しないので、`GADApplicationIdentifier` 未設定でもクラッシュしません。まず素の状態でビルドを通し、あとから広告を足す進め方ができます。
+>
+> 画面の向きは `Info.plist` で**縦固定済み**です（盤面は画面幅基準でボトルを並べるため横向きは未対応）。
+
+> 本リポジトリは既定で**非パーソナライズ広告**（`nonPersonalized: true`）を要求します。プライバシーポリシーで「子供を含む一般向けでは非パーソナライズ広告」と宣言しているためで、この設定のままなら ATT ダイアログは不要です。
+
+### ビルドの仕組み
+
+`npm run build` が `scripts/build-www.mjs` を実行し、ゲームの実行に必要なファイルだけを `www/` にコピーします（リポジトリ直下には `node_modules`・README 用スクリーンショット等、アプリに同梱すべきでないものが同居しているため）。その際、**`index.html` の広告プロバイダを `admob` に書き換えます**——AdMob はネイティブビルドでしか配信できないので、Web 側のソースは `""`（シミュレーション）のまま保たれます。`www/` は生成物なので `.gitignore` 済みです。
+
+なお `provider: "admob"` のまま**ブラウザで開いても安全**です。`ads.js` は Capacitor プラグインの実在を確認してから有効化するため、ブラウザでは `none` と判定してシミュレーション広告にフォールバックします（検証済み）。
+
 ## 公開前チェックリスト（法務・運用）
 
 ⚙️ 設定モーダルの下部から **Terms / Privacy** にリンクしています。いずれも**テンプレート**（`[OPERATOR NAME]` のようなプレースホルダー入り）なので、公開前に必ず実在の情報へ差し替えてください:
@@ -155,6 +192,10 @@ Poki の審査通過・AdMob アカウント作成とユニットID発行はご�
 | `style.css` | UI スタイル・星空背景・アニメーション |
 | `game.js` | ゲームロジック＋Canvas ボトルレンダラー（生成・注ぎ判定・BFSソルバー・傾き注ぎ・気泡・パワーアップ経済・リワード広告・コイン・紙吹雪・効果音） |
 | `analytics.js` | GA4 / Sentry の任意連携（未設定なら無害・無通信） |
+| `native.js` | ネイティブ専用の処理（スプラッシュ制御・ステータスバー）。ブラウザでは何もしません |
+| `capacitor.config.json` / `package.json` / `scripts/build-www.mjs` | iOS ビルドの設定とビルドスクリプト |
+| `assets/` | アプリアイコン・スプラッシュの元画像（`npm run icons` の入力） |
+| `ios/` | 生成済みの Xcode プロジェクト |
 | `ads.js` | リワード広告アダプタ（Poki / AdMob／未設定ならシミュレーションへフォールバック） |
 | `terms.html` / `privacy.html` / `tokushoho.html` | 利用規約・プライバシーポリシー・特定商取引法に基づく表記（要・実情報への差し替え） |
 
